@@ -1,12 +1,11 @@
 CREATE TABLE `users` (
   `id`          BIGINT,
-  `screen_name` VARCHAR(255),
+  `screen_name` VARCHAR(127),
   PRIMARY KEY (`id`, `screen_name`)
 )
   ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
   COLLATE utf8mb4_bin;
-;
 
 CREATE TABLE `micro_blogs` (
   `id`         BIGINT,

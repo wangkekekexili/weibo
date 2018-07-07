@@ -91,14 +91,24 @@ func stripHTML(input string) string {
 	// Remove <a> tags.
 	output := strings.Builder{}
 	pos := 0
-	ignore := false
+	inTagA := false
+	inTagSpan := false
 	runes := []rune(input)
 	for pos < len(runes) {
-		if ignore {
+		if inTagA {
 			if runes[pos] == '<' && pos+3 < len(runes) &&
 				runes[pos+1] == '/' && runes[pos+2] == 'a' && runes[pos+3] == '>' {
 				pos += 4
-				ignore = false
+				inTagA = false
+			} else {
+				pos++
+			}
+		} else if inTagSpan {
+			if runes[pos] == '<' && pos+6 < len(runes) &&
+				runes[pos+1] == '/' && runes[pos+2] == 's' && runes[pos+3] == 'p' &&
+				runes[pos+4] == 'a' && runes[pos+5] == 'n' && runes[pos+6] == '>' {
+				pos += 7
+				inTagA = false
 			} else {
 				pos++
 			}
@@ -106,7 +116,13 @@ func stripHTML(input string) string {
 			if runes[pos] == '<' && pos+2 < len(runes) &&
 				runes[pos+1] == 'a' && runes[pos+2] == ' ' {
 				pos += 3
-				ignore = true
+				inTagA = true
+			} else if runes[pos] == '<' && pos+5 < len(runes) &&
+				runes[pos+1] == 's' && runes[pos+2] == 'p' &&
+				runes[pos+3] == 'a' && runes[pos+4] == 'n' &&
+				runes[pos+5] == ' ' {
+				pos += 6
+				inTagSpan = true
 			} else {
 				output.WriteRune(runes[pos])
 				pos++

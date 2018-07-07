@@ -8,6 +8,7 @@ func TestStripHTML(t *testing.T) {
 	}{
 		{"Hey There<br />", "Hey There"},
 		{`Hello<a href=""><span>Hey There</span></a>World`, "HelloWorld"},
+		{"今天<span >中华儿女</span>", "今天"},
 	}
 	for _, test := range tests {
 		got := stripHTML(test.in)
