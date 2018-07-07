@@ -5,14 +5,22 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
+	_ "github.com/go-sql-driver/mysql"
+	"github.com/jmoiron/sqlx"
 	"github.com/tidwall/gjson"
-	"github.com/wangkekekexili/weibo/micro_blog"
+	"github.com/wangkekekexili/weibo/model/micro_blog"
+	"github.com/wangkekekexili/weibo/model/statistics"
+	"github.com/wangkekekexili/weibo/model/user"
 )
+
+var DB *sqlx.DB
 
 func init() {
 	log.SetFlags(log.Lshortfile | log.Ldate | log.Ltime)
+	DB = sqlx.MustConnect("mysql", "root:@tcp(localhost:3306)/weibo?parseTime=true")
 }
 
 func main() {
@@ -26,17 +34,35 @@ func main() {
 		if card.Get("card_type").Int() != 9 {
 			continue
 		}
-		id := card.Get("mblog.id").String()
-		b, err := get(fmt.Sprintf("https://m.weibo.cn/statuses/extend?id=%s&standalone=0", id))
+
+		microBlogID := card.Get("mblog.id").Int()
+		userID := card.Get("mblog.user.id").Int()
+		userScreenName := card.Get("mblog.user.screen_name").String()
+
+		b, err := get(fmt.Sprintf("https://m.weibo.cn/statuses/extend?id=%d&standalone=0", microBlogID))
 		if err != nil {
 			log.Fatal(err)
+		}
+		data := gjson.Get(string(b), "data")
+		text := stripHTML(data.Get("longTextContent").String())
+		numThumbUp := int(data.Get("attitudes_count").Int())
+		numComment := int(data.Get("comments_count").Int())
+		numRepost := int(data.Get("reposts_count").Int())
+
+		err = user.Update(DB, userID, userScreenName)
+		if err != nil {
+			log.Println(err)
 		}
 
-		m, err := micro_blog.NewFromJSON(id, gjson.Get(string(b), "data").String())
+		err = micro_blog.Update(DB, microBlogID, text, userID)
 		if err != nil {
-			log.Fatal(err)
+			log.Println(err)
 		}
-		fmt.Println(m)
+
+		err = statistics.Update(DB, microBlogID, numThumbUp, numComment, numRepost)
+		if err != nil {
+			log.Println(err)
+		}
 	}
 }
 
@@ -56,4 +82,37 @@ func get(url string) ([]byte, error) {
 	}
 	resp.Body.Close()
 	return b, nil
+}
+
+func stripHTML(input string) string {
+	// Remove <br /> <br> and \n.
+	input = strings.NewReplacer("<br />", "", "<br>", "", "\n", "").Replace(input)
+
+	// Remove <a> tags.
+	output := strings.Builder{}
+	pos := 0
+	ignore := false
+	runes := []rune(input)
+	for pos < len(runes) {
+		if ignore {
+			if runes[pos] == '<' && pos+3 < len(runes) &&
+				runes[pos+1] == '/' && runes[pos+2] == 'a' && runes[pos+3] == '>' {
+				pos += 4
+				ignore = false
+			} else {
+				pos++
+			}
+		} else {
+			if runes[pos] == '<' && pos+2 < len(runes) &&
+				runes[pos+1] == 'a' && runes[pos+2] == ' ' {
+				pos += 3
+				ignore = true
+			} else {
+				output.WriteRune(runes[pos])
+				pos++
+			}
+		}
+	}
+
+	return output.String()
 }
