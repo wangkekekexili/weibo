@@ -20,7 +20,7 @@ var DB *sqlx.DB
 
 func init() {
 	log.SetFlags(log.Lshortfile | log.Ldate | log.Ltime)
-	DB = sqlx.MustConnect("mysql", "root:@tcp(localhost:3306)/weibo?parseTime=true")
+	DB = sqlx.MustConnect("mysql", "root:@tcp(localhost:3306)/weibo?parseTime=true&charset=utf8mb4")
 }
 
 func main() {
