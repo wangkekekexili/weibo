@@ -24,44 +24,59 @@ func init() {
 }
 
 func main() {
-	b, err := get("https://m.weibo.cn/api/container/getIndex?containerid=102803&openApp=0")
-	if err != nil {
-		log.Fatal(err)
-	}
-	ticker := time.NewTicker(100 * time.Millisecond)
-	for _, card := range gjson.Get(string(b), "data.cards").Array() {
-		<-ticker.C
-		if card.Get("card_type").Int() != 9 {
-			continue
-		}
-
-		microBlogID := card.Get("mblog.id").Int()
-		userID := card.Get("mblog.user.id").Int()
-		userScreenName := card.Get("mblog.user.screen_name").String()
-
-		b, err := get(fmt.Sprintf("https://m.weibo.cn/statuses/extend?id=%d&standalone=0", microBlogID))
+	page := 0
+	pageTicker := time.NewTicker(2 * time.Second)
+	for {
+		<-pageTicker.C
+		log.Printf("fetching page %d\n", page)
+		b, err := get(fmt.Sprintf("https://m.weibo.cn/api/container/getIndex?containerid=102803&openApp=0&page=%d", page))
 		if err != nil {
 			log.Fatal(err)
 		}
-		data := gjson.Get(string(b), "data")
-		text := stripHTML(data.Get("longTextContent").String())
-		numThumbUp := int(data.Get("attitudes_count").Int())
-		numComment := int(data.Get("comments_count").Int())
-		numRepost := int(data.Get("reposts_count").Int())
-
-		err = user.Update(DB, userID, userScreenName)
-		if err != nil {
-			log.Println(err)
+		cards := gjson.Get(string(b), "data.cards").Array()
+		if len(cards) == 0 {
+			break
 		}
+		page++
 
-		err = micro_blog.Update(DB, microBlogID, text, userID)
-		if err != nil {
-			log.Println(err)
-		}
+		cardTicker := time.NewTicker(100 * time.Millisecond)
+		for _, card := range gjson.Get(string(b), "data.cards").Array() {
+			<-cardTicker.C
+			if card.Get("card_type").Int() != 9 {
+				continue
+			}
 
-		err = statistics.Update(DB, microBlogID, numThumbUp, numComment, numRepost)
-		if err != nil {
-			log.Println(err)
+			microBlogID := card.Get("mblog.id").Int()
+			userID := card.Get("mblog.user.id").Int()
+			userScreenName := card.Get("mblog.user.screen_name").String()
+
+			log.Printf("fetching micro blog %d\n", microBlogID)
+			b, err := get(fmt.Sprintf("https://m.weibo.cn/statuses/extend?id=%d&standalone=0", microBlogID))
+			if err != nil {
+				log.Fatal(err)
+			}
+			data := gjson.Get(string(b), "data")
+			text := stripHTML(data.Get("longTextContent").String())
+			numThumbUp := int(data.Get("attitudes_count").Int())
+			numComment := int(data.Get("comments_count").Int())
+			numRepost := int(data.Get("reposts_count").Int())
+
+			err = user.Update(DB, userID, userScreenName)
+			if err != nil {
+				log.Println(err)
+			}
+
+			err = micro_blog.Update(DB, microBlogID, text, userID)
+			if err != nil {
+				log.Println(err)
+			}
+
+			err = statistics.Update(DB, microBlogID, numThumbUp, numComment, numRepost)
+			if err != nil {
+				log.Println(err)
+			}
+
+			log.Printf("micro blog %d updating complete\n", microBlogID)
 		}
 	}
 }
